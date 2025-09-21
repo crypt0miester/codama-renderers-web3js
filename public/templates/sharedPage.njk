@@ -1,0 +1,303 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+import { PublicKey, Keypair, AccountMeta } from '@solana/web3.js';
+import { u32 } from '@coral-xyz/borsh';
+import { blob, offset, struct, seq, Layout as LayoutCls } from 'buffer-layout';
+
+
+/**
+ * Option type for nullable values
+ * @internal
+ */
+export type Option<T> = T | null;
+
+/**
+ * Option type that can also be undefined (for input parameters)
+ * @internal
+ */
+export type OptionOrNullable<T> = T | null | undefined;
+
+/**
+ * Creates a Some value for Option type
+ * @internal
+ */
+export function some<T>(value: T): Option<T> {
+  return value;
+}
+
+/**
+ * Creates a None value for Option type
+ * @internal
+ */
+export function none<T>(): Option<T> {
+  return null;
+}
+
+/**
+ * Checks if an Option has a value
+ * @internal
+ */
+export function isSome<T>(value: Option<T>): value is T {
+  return value !== null;
+}
+
+/**
+ * Checks if an Option is None
+ * @internal
+ */
+export function isNone<T>(value: Option<T>): value is null {
+  return value === null;
+}
+
+/**
+ * DateTime type (Unix timestamp in seconds)
+ * @internal
+ */
+export type DateTime = number;
+
+/**
+ * DateTime input type (can be Date, number, or string)
+ * @internal
+ */
+export type DateTimeInput = Date | number | string;
+
+/**
+ * Converts a DateTimeInput to DateTime (Unix timestamp)
+ * @internal
+ */
+export function toDateTime(input: DateTimeInput): DateTime {
+  if (input instanceof Date) {
+    return Math.floor(input.getTime() / 1000);
+  }
+  if (typeof input === 'string') {
+    return Math.floor(new Date(input).getTime() / 1000);
+  }
+  return input;
+}
+
+/**
+ * Amount type for token amounts with decimals
+ * @internal
+ */
+export type Amount<Unit extends string = string, Decimals extends number = number> = {
+  unit: Unit;
+  decimals: Decimals;
+  amount: bigint;
+};
+
+/**
+ * SOL amount in lamports
+ * @internal
+ */
+export type SolAmount = bigint;
+
+/**
+ * Transforms the given object such that the given keys are optional.
+ * @internal
+ */
+export type PickPartial<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+
+/**
+ * Asserts that the given value is not null or undefined.
+ * @internal
+ */
+export function expectSome<T> (value: T | null | undefined): T {
+  if (value == null) {
+    throw new Error('Expected a value but received null or undefined.');
+  }
+  return value;
+}
+
+/**
+ * Asserts that the given value is a PublicKey.
+ * @internal
+ */
+export function expectPublicKey(
+  value: PublicKey | Keypair | null | undefined
+): PublicKey {
+  if (!value) {
+    throw new Error('Expected a PublicKey.');
+  }
+  if (value instanceof PublicKey) {
+    return value;
+  }
+  // If it's a Keypair, get the public key
+  if ('publicKey' in value && value.publicKey instanceof PublicKey) {
+    return value.publicKey;
+  }
+  throw new Error('Expected a PublicKey.');
+}
+
+/**
+ * Checks if the given value is a Keypair (signer).
+ * @internal
+ */
+export function isKeypair(value: unknown): value is Keypair {
+  return value !== null &&
+         typeof value === 'object' &&
+         'publicKey' in value &&
+         'secretKey' in value;
+}
+
+/**
+ * Asserts that the given value is a PDA (with bump).
+ * @internal
+ */
+export function expectPda(value: PublicKey | [PublicKey, number] | null | undefined): [PublicKey, number] {
+  if (!value) {
+    throw new Error('Expected a PDA.');
+  }
+  if (Array.isArray(value) && value.length === 2 && value[0] instanceof PublicKey) {
+    return value;
+  }
+  throw new Error('Expected a PDA with bump.');
+}
+
+/**
+ * Defines an instruction account to resolve.
+ * @internal
+ */
+export type ResolvedAccount<T = PublicKey | Keypair | null> = { isWritable: boolean; isSigner: boolean; value: T; }
+
+/**
+ * Defines a set of instruction account to resolve.
+ * @internal
+ */
+export type ResolvedAccounts = Record<string, ResolvedAccount>;
+
+/**
+ * Defines a set of instruction account to resolve with their indices.
+ * @internal
+ */
+export type ResolvedAccountsWithIndices = Record<string, ResolvedAccount & { index: number }>;
+
+/**
+ * Get account metas and signers from resolved accounts.
+ * @internal
+ */
+export function getAccountMetasAndSigners(
+  accounts: ResolvedAccount[],
+  optionalAccountStrategy: 'omitted' | 'programId',
+  programId: PublicKey,
+): [AccountMeta[], Keypair[]] {
+  const keys: AccountMeta[] = [];
+  const signers: Keypair[] = [];
+
+  accounts.forEach(account => {
+    if (!account.value) {
+      if (optionalAccountStrategy === 'omitted') return;
+      keys.push({ pubkey: programId, isSigner: false, isWritable: false });
+      return;
+    }
+
+    const hasKeypair = isKeypair(account.value);
+    const pubkey = hasKeypair
+      ? (account.value as Keypair).publicKey
+      : (account.value as PublicKey);
+
+    // Only add to signers array if we have the Keypair
+    if (hasKeypair) {
+      signers.push(account.value as Keypair);
+    }
+
+    keys.push({
+      pubkey: pubkey,
+      isSigner: account.isSigner, // Use the isSigner field from the account definition
+      isWritable: account.isWritable,
+    });
+  });
+
+  return [keys, signers];
+};
+
+
+export interface Layout<T> {
+  span: number;
+  property?: string;
+
+  decode(b: Buffer, offset?: number): T;
+
+  encode(src: T, b: Buffer, offset?: number): number;
+
+  getSpan(b: Buffer, offset?: number): number;
+
+  replicate(name: string): this;
+}
+
+class WrappedLayout<T, U> extends LayoutCls<U> implements Layout<U> {
+  layout: Layout<T>;
+  decoder: (data: T) => U;
+  encoder: (src: U) => T;
+
+  get span(): number {
+    return this.layout.span;
+  }
+
+  constructor(
+    layout: Layout<T>,
+    decoder: (data: T) => U,
+    encoder: (src: U) => T,
+    property?: string
+  ) {
+    super(layout.span, property);
+    this.layout = layout;
+    this.decoder = decoder;
+    this.encoder = encoder;
+  }
+
+  decode(b: Buffer, offset?: number): U {
+    return this.decoder(this.layout.decode(b, offset));
+  }
+
+  encode(src: U, b: Buffer, offset?: number): number {
+    return this.layout.encode(this.encoder(src), b, offset);
+  }
+
+  getSpan(b: Buffer, offset?: number): number {
+    return this.layout.getSpan(b, offset);
+  }
+
+  replicate(name: string): this {
+    return new WrappedLayout(
+      this.layout,
+      this.decoder,
+      this.encoder,
+      name
+    ) as this;
+  }
+}
+
+/**
+ * Dynamic array layout with u32 length prefix (similar to vec in Rust)
+ * @internal
+ */
+export function uArray<T>(elementLayout: Layout<T>, property?: string): WrappedLayout<T[], T[]> {
+  const length = u32("length");
+  const layout = struct([
+    length,
+    seq(elementLayout, offset(length, -length.span), "values"),
+  ]);
+  return new WrappedLayout(
+    layout,
+    ({ values }: any) => values,
+    (values: T[]) => ({ values }),
+    property
+  );
+}
+
+/**
+ * Fixed-size byte array layout
+ * @internal
+ */
+export function fixedBytes(length: number, property?: string): Layout<Uint8Array> {
+  const layout = blob(length, property);
+  return new WrappedLayout(
+    layout,
+    (buffer: Buffer) => new Uint8Array(buffer),
+    (uint8Array: Uint8Array) => Buffer.from(uint8Array),
+    property
+  ) as Layout<Uint8Array>;
+}
+{% endblock %}

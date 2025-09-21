@@ -1,0 +1,36 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+{{ imports }}
+
+{{ macros.docblock(program.docs) }}
+export const {{ program.name | snakeCase | upper }}_PROGRAM_ID = new PublicKey('{{ program.publicKey }}');
+
+export type {{ program.name | pascalCase }}Program = {
+  name: '{{ program.name | camelCase }}';
+  publicKey: PublicKey;
+  version: '{{ program.version }}';
+};
+
+export function get{{ program.name | pascalCase }}Program(): {{ program.name | pascalCase }}Program {
+  return {
+    name: '{{ program.name | camelCase }}',
+    publicKey: {{ program.name | snakeCase | upper }}_PROGRAM_ID,
+    version: '{{ program.version }}',
+  };
+}
+
+// Helper to check if a transaction error contains a program error
+export function isProgramError(
+  error: any,
+  programId: PublicKey
+): boolean {
+  if (!error || !error.logs) return false;
+
+  const programIdStr = programId.toBase58();
+  return error.logs.some((log: string) =>
+    log.includes(`Program ${programIdStr} failed`)
+  );
+}
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+{{ imports }}
+
+export class ProgramError extends Error {
+  readonly code: number;
+  readonly programId: PublicKey;
+
+  constructor(message: string, code: number, programId: PublicKey, cause?: Error) {
+    super(message);
+    this.code = code;
+    this.programId = programId;
+    this.cause = cause;
+    this.name = 'ProgramError';
+  }
+}
+
+type ProgramErrorConstructor = new (programId: PublicKey, cause?: Error) => ProgramError;
+const codeToErrorMap: Map<number, ProgramErrorConstructor> = new Map();
+const nameToErrorMap: Map<string, ProgramErrorConstructor> = new Map();
+
+{% for error in errors | sort(false, false, 'code') %}
+{{ macros.docblock(error.docs) }}
+export class {{ error.name | pascalCase }}Error extends ProgramError {
+  override readonly name: string = '{{ error.name | pascalCase }}';
+
+  constructor(programId: PublicKey, cause?: Error) {
+    super('{{ error.message.replaceAll("'", "\\'") }}', 0x{{ error.code.toString(16) }}, programId, cause);
+  }
+}
+codeToErrorMap.set(0x{{ error.code.toString(16) }}, {{ error.name | pascalCase }}Error);
+nameToErrorMap.set('{{ error.name | pascalCase }}', {{ error.name | pascalCase }}Error);
+
+{% endfor %}
+/**
+ * Attempts to resolve a custom program error from the provided error code.
+ * @category Errors
+ */
+export function get{{ program.name | pascalCase }}ErrorFromCode(code: number, programId: PublicKey, cause?: Error): ProgramError | null {
+  const constructor = codeToErrorMap.get(code);
+  return constructor ? new constructor(programId, cause) : null;
+}
+
+/**
+ * Attempts to resolve a custom program error from the provided error name, i.e. 'Unauthorized'.
+ * @category Errors
+ */
+export function get{{ program.name | pascalCase }}ErrorFromName(name: string, programId: PublicKey, cause?: Error): ProgramError | null {
+  const constructor = nameToErrorMap.get(name);
+  return constructor ? new constructor(programId, cause) : null;
+}
+
+/**
+ * Parses a transaction error to extract the program error if present
+ * @category Errors
+ */
+export function parse{{ program.name | pascalCase }}Error(error: any, programId: PublicKey): ProgramError | null {
+  // Parse SendTransactionError or similar to extract custom program error codes
+  if (error?.logs) {
+    const regex = /custom program error: (0x[0-9a-f]+)/i;
+    for (const log of error.logs) {
+      const match = log.match(regex);
+      if (match) {
+        const errorCode = parseInt(match[1], 16);
+        return get{{ program.name | pascalCase }}ErrorFromCode(errorCode, programId, error);
+      }
+    }
+  }
+  return null;
+}
+{% endblock %}

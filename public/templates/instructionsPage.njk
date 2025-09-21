@@ -1,0 +1,84 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+{{ imports }}
+
+{% include "instructionsPageAccounts.njk" %}
+{% include "instructionsPageArgs.njk" %}
+
+{% if instructionDiscriminator %}
+// Instruction discriminator
+const {{ instruction.name | snakeCase | upper }}_DISCRIMINATOR = {{ instructionDiscriminator.value }};
+{% endif %}
+
+// Instruction.
+export function {{ instruction.name | camelCase }}(
+  {% set accountsType = instruction.name | pascalCase + 'InstructionAccounts' %}
+  {% set argsType = instruction.name | pascalCase + 'InstructionDataArgs' %}
+  {% if canMergeAccountsAndArgs %}
+    {% set accountsObj = 'input' %}
+    {% set argsObj = 'input' %}
+    {% if hasAccounts %}
+      input: {{ accountsType }} & {{ argsType }},
+    {% endif %}
+  {% else %}
+    {% set accountsObj = 'accounts' %}
+    {% set argsObj = 'args' %}
+    {% if hasAccounts %}
+      accounts: {{ accountsType }},
+    {% endif %}
+    {% if hasAnyArgs %}
+      args: {{ argsType }},
+    {% endif %}
+  {% endif %}
+  programId: PublicKey = {{ program.name | snakeCase | upper }}_PROGRAM_ID
+): TransactionInstruction {
+  // Accounts.
+  const resolvedAccounts = {
+    {% for account in accounts %}
+      {{ account.name | camelCase }}: { index: {{ loop.index0 }}, isWritable: {{ 'true' if account.isWritable else 'false' }} as boolean, isSigner: {{ 'true' if account.isSigner else 'false' }} as boolean, value: {{ accountsObj }}.{{ account.name | camelCase }} ?? null },
+    {% endfor %}
+  } satisfies ResolvedAccountsWithIndices;
+
+  // Arguments.
+  {% if instructionDiscriminator %}
+  const resolvedArgs: {{ instruction.name | pascalCase + 'InstructionData' }} = {
+    ...{{ argsObj }},
+    discriminator: {{ instruction.name | snakeCase | upper }}_DISCRIMINATOR,
+  };
+  {% else %}
+  const resolvedArgs: {{ instruction.name | pascalCase + 'InstructionData' }} = { ...{{ argsObj }} };
+  {% endif %}
+
+  {% include "instructionsPageResolvedInputs.njk" %}
+
+  // Accounts in order.
+  {% if hasAccounts %}
+    const orderedAccounts: ResolvedAccount[] = Object.values(resolvedAccounts).sort((a,b) => a.index - b.index);
+  {% else %}
+    const orderedAccounts: ResolvedAccount[] = Object.values(resolvedAccounts as ResolvedAccountsWithIndices);
+  {% endif %}
+
+  {% include "instructionsPageRemainingAccounts.njk" %}
+
+  // Keys and Signers.
+  const [keys, _signers] = getAccountMetasAndSigners(orderedAccounts, "{{ instruction.optionalAccountStrategy }}", programId);
+
+  // Data.
+  {% if hasData %}
+    const layout = get{{ instruction.name | pascalCase + 'InstructionData' }}Layout();
+    const buffer = Buffer.alloc(layout.span);
+    layout.encode(resolvedArgs as {{ instruction.name | pascalCase + 'InstructionData' }}, buffer);
+    const data = buffer;
+  {% else %}
+    const data = Buffer.alloc(0);
+  {% endif %}
+
+  return new TransactionInstruction({
+    keys,
+    programId,
+    data,
+  });
+}
+{% endblock %}

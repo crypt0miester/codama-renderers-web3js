@@ -1,0 +1,27 @@
+{% if isDataEnum %}
+  {% set strictName = definedType.name | pascalCase %}
+  {% set looseName = definedType.name | pascalCase + 'Args' %}
+  // Data Enum Helpers.
+  {% for variant in definedType.type.variants %}
+    {% set variantName = variant.name | pascalCase %}
+    {% if variant.kind === 'enumStructVariantTypeNode' %}
+      {% if variant.struct.fields.length > 0 %}
+      export function {{ definedType.name | camelCase }}{{ variantName }}(data: {{ looseName }}['{{ variantName }}']): {{ strictName }} {
+        return { {{ variantName }}: data } as {{ strictName }};
+      }
+      {% else %}
+      export function {{ definedType.name | camelCase }}{{ variantName }}(): {{ strictName }} {
+        return { {{ variantName }}: {} };
+      }
+      {% endif %}
+    {% elif variant.kind === 'enumTupleVariantTypeNode' %}
+      export function {{ definedType.name | camelCase }}{{ variantName }}(fields: {{ looseName }}['{{ variantName }}']['fields']): {{ strictName }} {
+        return { {{ variantName }}: { fields } } as {{ strictName }};
+      }
+    {% else %}
+      export function {{ definedType.name | camelCase }}{{ variantName }}(): {{ strictName }} {
+        return { {{ variantName }}: {} };
+      }
+    {% endif %}
+  {% endfor %}
+{% endif %}

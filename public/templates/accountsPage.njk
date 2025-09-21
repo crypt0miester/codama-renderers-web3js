@@ -1,0 +1,176 @@
+{% extends "layout.njk" %}
+{% import "macros.njk" as macros %}
+
+{% block main %}
+{{ imports }}
+
+{% if customData %}
+  {{ macros.docblock(account.docs) }}
+  export type {{ account.name | pascalCase }} = {
+    publicKey: PublicKey;
+    data: {{ customData.importAs | pascalCase }};
+  };
+{% else %}
+  {{ macros.docblock(account.docs) }}
+  export type {{ account.name | pascalCase }} = {
+    publicKey: PublicKey;
+    data: {{ account.name | pascalCase }}AccountData;
+  };
+
+  {{ macros.exportType(account.name | pascalCase + 'AccountData', typeManifest) }}
+
+  {{ macros.exportLayout(account.name | pascalCase + 'AccountData', typeManifest) }}
+{% endif %}
+
+export function deserialize{{ account.name | pascalCase }}(
+  publicKey: PublicKey,
+  accountInfo: AccountInfo<Buffer>
+): {{ account.name | pascalCase }} {
+  const data = get{{ account.name | pascalCase }}AccountDataLayout().decode(accountInfo.data);
+  return { publicKey, data };
+}
+
+export async function fetch{{ account.name | pascalCase }}(
+  connection: Connection,
+  publicKey: PublicKey,
+  config?: GetAccountInfoConfig
+): Promise<{{ account.name | pascalCase }}> {
+  const accountInfo = await connection.getAccountInfo(publicKey, config);
+  if (!accountInfo) {
+    throw new Error(`Account not found: ${publicKey.toBase58()}`);
+  }
+  return deserialize{{ account.name | pascalCase }}(publicKey, accountInfo);
+}
+
+export async function safeFetch{{ account.name | pascalCase }}(
+  connection: Connection,
+  publicKey: PublicKey,
+  config?: GetAccountInfoConfig
+): Promise<{{ account.name | pascalCase }} | null> {
+  const accountInfo = await connection.getAccountInfo(publicKey, config);
+  if (!accountInfo) {
+    return null;
+  }
+  return deserialize{{ account.name | pascalCase }}(publicKey, accountInfo);
+}
+
+export async function fetchAll{{ account.name | pascalCase }}(
+  connection: Connection,
+  publicKeys: PublicKey[],
+  config?: GetMultipleAccountsConfig
+): Promise<{{ account.name | pascalCase }}[]> {
+  const accountInfos = await connection.getMultipleAccountsInfo(publicKeys, config);
+  const accounts: {{ account.name | pascalCase }}[] = [];
+
+  for (let i = 0; i < accountInfos.length; i++) {
+    const accountInfo = accountInfos[i];
+    if (!accountInfo) {
+      throw new Error(`Account not found: ${publicKeys[i].toBase58()}`);
+    }
+    accounts.push(deserialize{{ account.name | pascalCase }}(publicKeys[i], accountInfo));
+  }
+
+  return accounts;
+}
+
+export async function safeFetchAll{{ account.name | pascalCase }}(
+  connection: Connection,
+  publicKeys: PublicKey[],
+  config?: GetMultipleAccountsConfig
+): Promise<{{ account.name | pascalCase }}[]> {
+  const accountInfos = await connection.getMultipleAccountsInfo(publicKeys, config);
+  const accounts: {{ account.name | pascalCase }}[] = [];
+
+  for (let i = 0; i < accountInfos.length; i++) {
+    const accountInfo = accountInfos[i];
+    if (accountInfo) {
+      accounts.push(deserialize{{ account.name | pascalCase }}(publicKeys[i], accountInfo));
+    }
+  }
+
+  return accounts;
+}
+
+{% if gpaFields %}
+export async function get{{ account.name | pascalCase }}GpaBuilder(
+  connection: Connection,
+  programId: PublicKey
+) {
+  // GPA implementation for filtering accounts
+  const filters: GetProgramAccountsFilter[] = [];
+  {% if discriminator.kind === 'fieldDiscriminatorNode' %}
+  // Add discriminator filter if present
+  filters.push({
+    memcmp: {
+      offset: 0, // Adjust offset based on actual discriminator position
+      bytes: Buffer.from({{ discriminator.value }}).toString('base64'),
+    },
+  });
+  {% elif discriminator.kind === 'sizeDiscriminatorNode' %}
+  // Add size filter
+  filters.push({
+    dataSize: {{ discriminator.size }},
+  });
+  {% endif %}
+
+  return {
+    async run() {
+      const accounts = await connection.getProgramAccounts(programId, {
+        filters,
+      });
+      return accounts.map(({ pubkey, account }) =>
+        deserialize{{ account.name | pascalCase }}(pubkey, account)
+      );
+    },
+    whereField(field: string, value: any) {
+      // Add field-specific filters
+      // This would need implementation based on field offsets
+      return this;
+    }
+  };
+}
+{% endif %}
+
+{% if account.size != null %}
+export function get{{ account.name | pascalCase }}Size(): number {
+  return {{ account.size }};
+}
+{% endif %}
+
+{% if seeds.length > 0 %}
+export function find{{ account.name | pascalCase }}Pda(
+  programId: PublicKey,
+  {% if hasVariableSeeds %}
+    seeds: {
+      {% for seed in seeds %}
+        {% if seed.kind === 'variablePdaSeedNode' %}
+          {{ macros.docblock(seed.docs) }}
+          {{ seed.name | camelCase }}: {{ seed.typeManifest.looseType }};
+        {% endif %}
+      {% endfor %}
+    }
+  {% endif %}
+): [PublicKey, number] {
+  const seedsArray: (Buffer | Uint8Array)[] = [];
+  {% for seed in seeds %}
+    {% if seed.kind === 'constantPdaSeedNode' %}
+      {% if seed.value.kind === 'stringValueNode' %}
+        seedsArray.push(Buffer.from('{{ seed.value.string }}'));
+      {% elif seed.value.kind === 'numberValueNode' %}
+        seedsArray.push(Buffer.from([{{ seed.value.number }}]));
+      {% elif seed.value.kind === 'programIdValueNode' %}
+        seedsArray.push(programId.toBuffer());
+      {% else %}
+        seedsArray.push({{ seed.valueManifest.value }});
+      {% endif %}
+    {% elif seed.kind === 'variablePdaSeedNode' %}
+      // Serialize the seed using the appropriate serializer
+      const seedData = {{ seed.typeManifest.serializer }}.encode(seeds.{{ seed.name | camelCase }});
+      seedsArray.push(Buffer.from(seedData));
+    {% endif %}
+  {% endfor %}
+
+  return PublicKey.findProgramAddressSync(seedsArray, programId);
+}
+{% endif %}
+{% endblock %}
