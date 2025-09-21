@@ -204,16 +204,15 @@ export function getTypeManifestVisitor(input: {
                         strictImports.mergeWith(prefix.strictImports);
                         looseImports.mergeWith(prefix.looseImports);
                         serializerImports.mergeWith(prefix.serializerImports);
-                        options.push(`size: ${prefix.serializer}`);
+                        serializerImports.add('borsh', 'vecU8');
+                        options.push(`${prefix.serializer}`);
                     }
-
-                    const optionsAsString = options.length > 0 ? `{ ${options.join(', ')} }` : '';
 
                     return {
                         isEnum: false,
                         looseImports,
                         looseType: 'Uint8Array',
-                        serializer: typeof parentSize === 'number' ? `fixedBytes(${parentSize})` : `vecU8(${optionsAsString})`,
+                        serializer: typeof parentSize === 'number' ? `fixedBytes(${parentSize})` : `vecU8()`,
                         serializerImports,
                         strictImports,
                         strictType: 'Uint8Array',
@@ -281,10 +280,12 @@ export function getTypeManifestVisitor(input: {
                     const serializerName = `get${pascalCaseDefinedType}Layout`;
                     const importFrom = getImportFrom(node);
 
+                    // For defined types, we only use the strict (bigint) version now
+                    // No Args version is generated
                     return {
                         isEnum: false,
-                        looseImports: new ImportMap().add(importFrom, `${pascalCaseDefinedType}Args`),
-                        looseType: `${pascalCaseDefinedType}Args`,
+                        looseImports: new ImportMap().add(importFrom, pascalCaseDefinedType),
+                        looseType: pascalCaseDefinedType,
                         serializer: `${serializerName}()`,
                         serializerImports: new ImportMap().add(importFrom, serializerName),
                         strictImports: new ImportMap().add(importFrom, pascalCaseDefinedType),
@@ -602,7 +603,6 @@ export function getTypeManifestVisitor(input: {
                     const childManifest = visit(optionType.item, self);
                     // Use our custom Option type
                     childManifest.strictImports.add('shared', 'Option');
-                    childManifest.looseImports.add('shared', 'OptionOrNullable');
                     childManifest.serializerImports.add('borsh', 'option');
                     const options: string[] = [];
 
@@ -625,7 +625,7 @@ export function getTypeManifestVisitor(input: {
 
                     return {
                         ...childManifest,
-                        looseType: `OptionOrNullable<${childManifest.looseType}>`,
+                        looseType: `Option<${childManifest.looseType}>`,
                         serializer: `option(${childManifest.serializer}${optionsAsString})`,
                         strictType: `Option<${childManifest.strictType}>`,
                     };

@@ -6,7 +6,7 @@
     {% set variantName = variant.name | pascalCase %}
     {% if variant.kind === 'enumStructVariantTypeNode' %}
       {% if variant.struct.fields.length > 0 %}
-      export function {{ definedType.name | camelCase }}{{ variantName }}(data: {{ looseName }}['{{ variantName }}']): {{ strictName }} {
+      export function {{ definedType.name | camelCase }}{{ variantName }}(data: Extract<{{ strictName }}, { {{ variantName }}: any }>['{{ variantName }}']): {{ strictName }} {
         return { {{ variantName }}: data } as {{ strictName }};
       }
       {% else %}
@@ -15,7 +15,7 @@
       }
       {% endif %}
     {% elif variant.kind === 'enumTupleVariantTypeNode' %}
-      export function {{ definedType.name | camelCase }}{{ variantName }}(fields: {{ looseName }}['{{ variantName }}']['fields']): {{ strictName }} {
+      export function {{ definedType.name | camelCase }}{{ variantName }}(fields: Extract<{{ strictName }}, { {{ variantName }}: any }>['{{ variantName }}']['fields']): {{ strictName }} {
         return { {{ variantName }}: { fields } } as {{ strictName }};
       }
     {% else %}

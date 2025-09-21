@@ -17,7 +17,14 @@
     data: {{ account.name | pascalCase }}AccountData;
   };
 
-  {{ macros.exportType(account.name | pascalCase + 'AccountData', typeManifest) }}
+  {# Generate both Data and DataArgs types, with Data extending DataArgs #}
+  export type {{ account.name | pascalCase }}AccountDataArgs = {{ typeManifest.looseType }};
+
+  export type {{ account.name | pascalCase }}AccountData = {
+    {% if account.discriminators and account.discriminators.length > 0 %}
+    discriminator: Uint8Array;
+    {% endif %}
+  } & {{ account.name | pascalCase }}AccountDataArgs;
 
   {{ macros.exportLayout(account.name | pascalCase + 'AccountData', typeManifest) }}
 {% endif %}

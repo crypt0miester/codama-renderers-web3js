@@ -11,13 +11,7 @@ import { blob, offset, struct, seq, Layout as LayoutCls } from 'buffer-layout';
  * Option type for nullable values
  * @internal
  */
-export type Option<T> = T | null;
-
-/**
- * Option type that can also be undefined (for input parameters)
- * @internal
- */
-export type OptionOrNullable<T> = T | null | undefined;
+export type Option<T> = T | null | undefined;
 
 /**
  * Creates a Some value for Option type
@@ -179,7 +173,6 @@ export type ResolvedAccountsWithIndices = Record<string, ResolvedAccount & { ind
  */
 export function getAccountMetasAndSigners(
   accounts: ResolvedAccount[],
-  optionalAccountStrategy: 'omitted' | 'programId',
   programId: PublicKey,
 ): [AccountMeta[], Keypair[]] {
   const keys: AccountMeta[] = [];
@@ -187,7 +180,6 @@ export function getAccountMetasAndSigners(
 
   accounts.forEach(account => {
     if (!account.value) {
-      if (optionalAccountStrategy === 'omitted') return;
       keys.push({ pubkey: programId, isSigner: false, isWritable: false });
       return;
     }

@@ -431,6 +431,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}): Visitor<
                         imports.add(getImportFrom(remainingAccounts.value), camelCase(remainingAccounts.value.name));
                     }
 
+
                     return createRenderMap(
                         `instructions/${camelCase(node.name)}.ts`,
                         render('instructionsPage.njk', {

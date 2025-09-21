@@ -142,6 +142,9 @@ export function renderInstructionDefaults(
                             if (typeManifest.looseType === 'Uint8Array' || typeManifest.looseType.includes('Uint8Array')) {
                                 return [`Buffer.from(expectSome(${argObject}.${camelCase(valueSeed.name)}))`];
                             }
+                            if (typeManifest.looseType === 'number') {
+                                return [`Buffer.from(new Uint32Array([${argObject}.${camelCase(valueSeed.name)}]).buffer)`];
+                            }
                             imports.mergeWith(typeManifest.serializerImports);
                             return [
                                 `${typeManifest.serializer}.encode(expectSome(${argObject}.${camelCase(valueSeed.name)}))`,
@@ -157,6 +160,9 @@ export function renderInstructionDefaults(
                         if (typeManifest.looseType === 'Uint8Array' || typeManifest.looseType.includes('Uint8Array')) {
                             imports.mergeWith(valueManifest.valueImports);
                             return [`Buffer.from(${valueManifest.value})`];
+                        }
+                        if (typeManifest.looseType === 'number') {
+                            return [`Buffer.from(new Uint32Array([${valueManifest.value}]).buffer)`];
                         }
                         imports.mergeWith(typeManifest.serializerImports);
                         imports.mergeWith(valueManifest.valueImports);

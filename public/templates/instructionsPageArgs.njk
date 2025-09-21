@@ -1,6 +1,12 @@
 {% if not customData and hasData %}
   // Data.
-  {{ macros.exportType(instruction.name | pascalCase + 'InstructionData', dataArgManifest) }}
+  export type {{ instruction.name | pascalCase }}InstructionDataArgs = {{ dataArgManifest.looseType }};
+
+  export type {{ instruction.name | pascalCase }}InstructionData = {
+    {% if instructionDiscriminator %}
+    discriminator: Uint8Array;
+    {% endif %}
+  } & {{ instruction.name | pascalCase }}InstructionDataArgs;
 
   {{ macros.exportSerializer(instruction.name | pascalCase + 'InstructionData', dataArgManifest) }}
 {% endif %}

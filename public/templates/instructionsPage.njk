@@ -17,14 +17,7 @@ export function {{ instruction.name | camelCase }}(
   {% set accountsType = instruction.name | pascalCase + 'InstructionAccounts' %}
   {% set argsType = instruction.name | pascalCase + 'InstructionDataArgs' %}
   {% if canMergeAccountsAndArgs %}
-    {% set accountsObj = 'input' %}
-    {% set argsObj = 'input' %}
-    {% if hasAccounts %}
-      input: {{ accountsType }} & {{ argsType }},
-    {% endif %}
-  {% else %}
     {% set accountsObj = 'accounts' %}
-    {% set argsObj = 'args' %}
     {% if hasAccounts %}
       accounts: {{ accountsType }},
     {% endif %}
@@ -44,11 +37,13 @@ export function {{ instruction.name | camelCase }}(
   // Arguments.
   {% if instructionDiscriminator %}
   const resolvedArgs: {{ instruction.name | pascalCase + 'InstructionData' }} = {
-    ...{{ argsObj }},
     discriminator: {{ instruction.name | snakeCase | upper }}_DISCRIMINATOR,
+    {% if hasAnyArgs %}
+    ...args,
+    {% endif %}
   };
   {% else %}
-  const resolvedArgs: {{ instruction.name | pascalCase + 'InstructionData' }} = { ...{{ argsObj }} };
+  const resolvedArgs: {{ instruction.name | pascalCase + 'InstructionData' }} = { ...args };
   {% endif %}
 
   {% include "instructionsPageResolvedInputs.njk" %}
@@ -63,7 +58,7 @@ export function {{ instruction.name | camelCase }}(
   {% include "instructionsPageRemainingAccounts.njk" %}
 
   // Keys and Signers.
-  const [keys, _signers] = getAccountMetasAndSigners(orderedAccounts, "{{ instruction.optionalAccountStrategy }}", programId);
+  const [keys, _signers] = getAccountMetasAndSigners(orderedAccounts, programId);
 
   // Data.
   {% if hasData %}

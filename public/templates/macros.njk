@@ -12,16 +12,18 @@
 {% endmacro %}
 
 {# Export a type or an enum. #}
-{% macro exportType(name, typeManifest) %}
+{% macro exportType(name, typeManifest, skipArgs=false) %}
 {% set looseName = name + 'Args' %}
 {%- if typeManifest.isEnum -%}
 export enum {{ name }} {{ typeManifest.strictType }};
-
+{% if not skipArgs %}
 export type {{ looseName }} = {{ name }};
+{% endif %}
 {%- else -%}
 export type {{ name }} = {{ typeManifest.strictType }};
-
+{% if not skipArgs %}
 export type {{ looseName }} = {{ typeManifest.looseType if typeManifest.strictType != typeManifest.looseType else name }};
+{% endif %}
 {% endif %}
 {% endmacro %}
 
