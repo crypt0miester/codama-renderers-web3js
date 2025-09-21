@@ -231,10 +231,6 @@ class WrappedLayout<T, U> extends LayoutCls<U> implements Layout<U> {
   decoder: (data: T) => U;
   encoder: (src: U) => T;
 
-  get span(): number {
-    return this.layout.span;
-  }
-
   constructor(
     layout: Layout<T>,
     decoder: (data: T) => U,

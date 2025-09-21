@@ -813,7 +813,7 @@ export function getTypeManifestVisitor(input: {
                     const fieldSerializers = fields.map(field => field.serializer).join(', ');
                     const structDescription =
                         currentParentName?.strict && !currentParentName.strict.match(/['"<>]/)
-                            ? `, { description: '${pascalCase(currentParentName.strict)}' }`
+                            ? `, '${pascalCase(currentParentName.strict)}'`
                             : '';
                     // rustEnum doesn't need explicit type params
                     const baseManifest = {
