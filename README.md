@@ -22,9 +22,9 @@ Add the following script to your Codama configuration file.
 ```json
 {
     "scripts": {
-        "js": {
+        "web3js": {
             "from": "codama-renderers-web3js",
-            "args": ["clients/js/src/generated"]
+            "args": ["clients/web3js/src/generated"]
         }
     }
 }

@@ -543,6 +543,7 @@ export function getRenderMapVisitor(options: GetRenderMapOptions = {}): Visitor<
                             ['programs/index.ts']:
                                 programsToExport.length > 0 ? render('programsIndex.njk', ctx) : undefined,
                             ['shared/index.ts']: hasAnythingToExport ? render('sharedPage.njk', ctx) : undefined,
+                            ['types/buffer-layout/index.d.ts']: hasAnythingToExport ? render('bufferLayoutTypes.njk', ctx) : undefined,
                             ['types/index.ts']:
                                 definedTypesToExport.length > 0 ? render('definedTypesIndex.njk', ctx) : undefined,
                         }),
